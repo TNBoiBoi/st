@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>אונו פופס — ניהול מלאי</title>
+  <meta name="theme-color" content="#7c3aed">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="אונו פופס">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8D%A6%3C/text%3E%3C/svg%3E">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <style>
+    :root {
+      --p: #7c3aed;
+      --p2: #6d28d9;
+      --pink: #db2777;
+      --p-light: #ede9fe;
+      --bg: #f5f3ff;
+      --card: #fff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --r: 14px;
+      --green: #059669;
+      --green-bg: #d1fae5;
+      --yellow: #d97706;
+      --yellow-bg: #fef3c7;
+      --red: #dc2626;
+      --red-bg: #fee2e2;
+      --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+      --shadow-md: 0 4px 16px rgba(0,0,0,.10);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    [hidden] { display: none !important; }
+    body { font-family: 'Segoe UI', system-ui, Arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; direction: rtl; }
+
+    /* ── Header ───────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, var(--p) 0%, var(--pink) 100%);
+      color: #fff; padding: 18px 22px 0;
+      box-shadow: 0 4px 16px rgba(124,58,237,.3);
+    }
+    .header-top { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+    .header-top .logo { font-size: 2.2rem; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.2)); }
+    .header-top h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -.5px; }
+    .header-top p { font-size: .82rem; opacity: .8; margin-top: 2px; }
+    .stats-bar {
+      display: flex; gap: 6px; overflow-x: auto; padding-bottom: 14px;
+      scrollbar-width: none;
+    }
+    .stats-bar::-webkit-scrollbar { display: none; }
+    .stat-chip {
+      background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.25);
+      border-radius: 30px; padding: 5px 14px; white-space: nowrap;
+      font-size: .8rem; font-weight: 600; color: #fff; backdrop-filter: blur(4px);
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+    .stat-chip.warn { background: rgba(251,191,36,.35); border-color: rgba(251,191,36,.5); }
+    .stat-chip.orders { background: rgba(52,211,153,.3); border-color: rgba(52,211,153,.5); }
+
+    /* ── Nav ──────────────────────────────────────────── */
+    nav {
+      background: #fff; border-bottom: 2px solid var(--border);
+      display: flex; position: sticky; top: 0; z-index: 90;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+    .nav-btn {
+      flex: 1; padding: 13px 6px; border: none; background: none; cursor: pointer;
+      font-size: .88rem; color: var(--muted); border-bottom: 3px solid transparent;
+      margin-bottom: -2px; font-family: inherit; font-weight: 500;
+      transition: color .15s, border-color .15s; position: relative;
+    }
+    .nav-btn:hover { color: var(--p); }
+    .nav-btn.active { color: var(--p); border-bottom-color: var(--p); font-weight: 700; }
+    .nav-badge {
+      position: absolute; top: 7px; left: calc(50% - 24px);
+      background: var(--red); color: #fff; border-radius: 10px;
+      font-size: .65rem; font-weight: 700; padding: 1px 5px; min-width: 18px;
+      text-align: center; line-height: 1.4;
+    }
+
+    /* ── Main ─────────────────────────────────────────── */
+    main { max-width: 880px; margin: 0 auto; padding: 22px 14px 80px; }
+
+    /* ── Banner ───────────────────────────────────────── */
+    .banner {
+      border-radius: var(--r); padding: 14px 18px; margin-bottom: 20px;
+      font-size: .88rem; display: flex; gap: 10px; align-items: flex-start;
+      line-height: 1.5;
+    }
+    .banner-warn { background: var(--yellow-bg); border: 1px solid #fbbf24; color: #78350f; }
+
+    /* ── Search view ──────────────────────────────────── */
+    .search-wrap { position: relative; margin-bottom: 10px; }
+    .search-input {
+      width: 100%; padding: 16px 52px 16px 20px; font-size: 1.05rem;
+      border: 2px solid var(--border); border-radius: var(--r); outline: none;
+      font-family: inherit; background: #fff; direction: rtl;
+      transition: border-color .2s, box-shadow .2s;
+      box-shadow: var(--shadow);
+    }
+    .search-input:focus { border-color: var(--p); box-shadow: 0 0 0 4px rgba(124,58,237,.1); }
+    .search-icon { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); font-size: 1.15rem; pointer-events: none; }
+    .search-hint { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .search-hint .hint-icon { font-size: 2.5rem; margin-bottom: 10px; }
+    .search-hint p { font-size: .9rem; }
+    .search-hint small { font-size: .8rem; opacity: .7; display: block; margin-top: 6px; }
+    .results-count { font-size: .82rem; color: var(--muted); margin-bottom: 12px; padding-right: 2px; }
+    mark { background: #fde68a; border-radius: 3px; padding: 0 1px; }
+
+    /* ── View header ──────────────────────────────────── */
+    .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+    .view-header h2 { font-size: 1.1rem; font-weight: 700; }
+
+    /* ── Filter chips ─────────────────────────────────── */
+    .filter-bar { display: flex; gap: 7px; overflow-x: auto; margin-bottom: 18px; padding-bottom: 4px; scrollbar-width: none; }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .fchip {
+      padding: 5px 14px; border-radius: 20px; border: 1.5px solid var(--border);
+      background: #fff; font-size: .8rem; font-weight: 600; cursor: pointer;
+      white-space: nowrap; font-family: inherit; color: var(--muted);
+      transition: all .15s; flex-shrink: 0;
+    }
+    .fchip:hover { border-color: var(--p); color: var(--p); }
+    .fchip.active { background: var(--p); border-color: var(--p); color: #fff; }
+    .fchip.warn-chip.active { background: var(--red); border-color: var(--red); }
+
+    /* ── Buttons ──────────────────────────────────────── */
+    .btn {
+      padding: 9px 18px; border-radius: 10px; border: none; cursor: pointer;
+      font-size: .86rem; font-family: inherit; font-weight: 600;
+      transition: filter .15s, transform .1s; display: inline-flex;
+      align-items: center; gap: 5px; white-space: nowrap;
+    }
+    .btn:active { transform: scale(.96); }
+    .btn-primary  { background: var(--p); color: #fff; }
+    .btn-primary:hover  { filter: brightness(1.1); }
+    .btn-outline  { background: var(--p-light); color: var(--p); }
+    .btn-outline:hover  { filter: brightness(.95); }
+    .btn-danger   { background: var(--red-bg); color: var(--red); }
+    .btn-danger:hover   { background: #fecaca; }
+    .btn-success  { background: var(--green-bg); color: var(--green); }
+    .btn-success:hover  { background: #a7f3d0; }
+    .btn-sm { padding: 6px 12px; font-size: .78rem; border-radius: 8px; }
+    .btn-icon { padding: 6px 8px; border-radius: 8px; }
+
+    /* ── Card ─────────────────────────────────────────── */
+    .card {
+      background: var(--card); border-radius: var(--r); border: 1px solid var(--border);
+      padding: 16px 18px; margin-bottom: 12px; box-shadow: var(--shadow);
+      transition: box-shadow .2s, transform .15s;
+    }
+    .card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+    .card.low-stock { border-color: #fca5a5; border-width: 1.5px; }
+    .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; gap: 10px; }
+    .prod-name { font-size: 1.05rem; font-weight: 700; line-height: 1.3; }
+    .vendor-chip {
+      padding: 3px 11px; border-radius: 20px; font-size: .76rem; font-weight: 700;
+      white-space: nowrap; flex-shrink: 0; letter-spacing: .2px;
+    }
+    .card-body { display: grid; grid-template-columns: auto 1fr; gap: 14px 20px; align-items: center; }
+    .qty-block { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .qty-controls { display: flex; align-items: center; gap: 6px; }
+    .qty-btn {
+      width: 28px; height: 28px; border-radius: 8px; border: 1.5px solid var(--border);
+      background: #fff; cursor: pointer; font-size: 1.1rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; line-height: 1;
+      transition: all .15s; color: var(--muted);
+    }
+    .qty-btn:hover { border-color: var(--p); color: var(--p); background: var(--p-light); }
+    .qty-btn:active { transform: scale(.9); }
+    .qty-num {
+      font-size: 1.6rem; font-weight: 800; min-width: 38px; text-align: center;
+      line-height: 1; cursor: pointer; border-radius: 6px; padding: 2px 4px;
+      transition: background .15s;
+    }
+    .qty-num:hover { background: var(--p-light); }
+    .qty-num.ok     { color: var(--green); }
+    .qty-num.warn   { color: var(--yellow); }
+    .qty-num.danger { color: var(--red); }
+    .qty-label { font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+    .card-info { display: flex; flex-direction: column; gap: 8px; }
+    .info-row { display: flex; align-items: center; gap: 8px; font-size: .87rem; }
+    .info-label { color: var(--muted); font-size: .75rem; min-width: 60px; }
+    .order-chip { background: var(--green-bg); color: var(--green); padding: 2px 9px; border-radius: 12px; font-size: .78rem; font-weight: 600; }
+    .no-order { color: var(--muted); }
+    .card-actions { display: flex; gap: 7px; flex-wrap: wrap; padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--border); }
+    .low-badge { background: var(--red-bg); color: var(--red); border-radius: 20px; padding: 1px 8px; font-size: .72rem; font-weight: 700; }
+
+    /* ── Low stock alert ──────────────────────────────── */
+    .alert-bar {
+      background: var(--red-bg); border: 1px solid #fca5a5; border-radius: var(--r);
+      padding: 12px 16px; margin-bottom: 16px; font-size: .88rem; color: #991b1b;
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    /* ── Orders ───────────────────────────────────────── */
+    .vendor-block { margin-bottom: 20px; border-radius: var(--r); overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow); }
+    .vendor-title {
+      background: linear-gradient(135deg, var(--p), var(--pink));
+      color: #fff; padding: 12px 18px; font-weight: 700;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .vendor-total { font-size: .82rem; opacity: .85; }
+    .order-list { list-style: none; background: #fff; }
+    .order-list li {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 11px 18px; border-bottom: 1px solid var(--border); font-size: .9rem;
+    }
+    .order-list li:last-child { border-bottom: none; }
+    .order-list li strong { color: var(--p); font-weight: 700; }
+    .order-item-actions { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+    .orders-summary {
+      background: var(--p-light); border-radius: var(--r);
+      padding: 14px 18px; margin-bottom: 20px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: .9rem; color: var(--p2);
+    }
+    .orders-summary strong { font-size: 1.1rem; }
+
+    /* ── Sort bar ────────────────────────────────────── */
+    .sort-bar {
+      display: flex; align-items: center; gap: 7px; margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .sort-label { font-size: .78rem; font-weight: 700; color: var(--muted); white-space: nowrap; }
+
+    /* ── Count mode ──────────────────────────────────── */
+    .count-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 300;
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .count-card {
+      background: #fff; border-radius: 22px; width: 100%; max-width: 420px;
+      padding: 24px; box-shadow: 0 24px 64px rgba(0,0,0,.35);
+      display: flex; flex-direction: column; gap: 18px;
+    }
+    .count-top-bar { display: flex; justify-content: space-between; align-items: center; }
+    .count-progress-text { font-size: .88rem; color: var(--muted); font-weight: 700; }
+    .count-progress-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .count-progress-fill { height: 100%; background: linear-gradient(90deg, var(--p), var(--pink)); border-radius: 3px; transition: width .35s ease; }
+    .count-product-area { text-align: center; padding: 6px 0; }
+    .count-name { font-size: 1.45rem; font-weight: 800; line-height: 1.2; margin: 10px 0 6px; }
+    .count-meta { font-size: .82rem; color: var(--muted); margin-bottom: 4px; }
+    .count-prev { font-size: .8rem; color: var(--muted); font-style: italic; }
+    .count-input-area { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .count-input-label { font-size: .88rem; font-weight: 700; color: var(--text); }
+    .count-big-controls { display: flex; align-items: center; gap: 14px; }
+    .count-btn { width: 46px; height: 46px; border-radius: 12px; border: 2px solid var(--border); background: #fff; cursor: pointer; font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; justify-content: center; color: var(--muted); transition: all .15s; }
+    .count-btn:hover { border-color: var(--p); color: var(--p); background: var(--p-light); }
+    .count-input { width: 100px; text-align: center; padding: 8px; font-size: 2.2rem; font-weight: 800; border: 2.5px solid var(--p); border-radius: 12px; outline: none; font-family: inherit; }
+    .count-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .count-footer .btn-primary { flex: 1; font-size: .95rem; padding: 12px; }
+
+    /* ── Fridges ─────────────────────────────────────── */
+    .fridge-section-title {
+      font-size: .82rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .5px; margin: 20px 0 10px;
+    }
+    .fridge-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px; margin-bottom: 6px;
+    }
+    .fridge-card {
+      background: var(--card); border: 1.5px solid var(--border); border-radius: var(--r);
+      padding: 16px 10px; text-align: center; cursor: pointer;
+      transition: border-color .15s, box-shadow .15s, transform .15s;
+      box-shadow: var(--shadow); display: flex; flex-direction: column;
+      align-items: center; gap: 5px; position: relative;
+    }
+    .fridge-card:hover { border-color: var(--p); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+    .fridge-card.has-low { border-color: #fca5a5; }
+    .fridge-card.empty-fridge { opacity: .6; }
+    .fridge-icon { font-size: 1.8rem; line-height: 1; }
+    .fridge-name { font-size: .8rem; font-weight: 700; color: var(--text); }
+    .fridge-count { font-size: .72rem; color: var(--muted); }
+
+    /* ── Loading / Empty ──────────────────────────────── */
+    .loading { text-align: center; padding: 50px 20px; color: var(--muted); }
+    .spinner {
+      width: 32px; height: 32px; border: 3px solid var(--border);
+      border-top-color: var(--p); border-radius: 50%;
+      animation: spin .75s linear infinite; margin: 0 auto 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty { text-align: center; padding: 55px 20px; color: var(--muted); }
+    .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+    .empty p { font-size: .95rem; }
+    .empty small { display: block; margin-top: 6px; font-size: .82rem; opacity: .7; }
+
+    /* ── Modal ────────────────────────────────────────── */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200;
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-backdrop[hidden] { display: none; }
+    .modal {
+      background: #fff; border-radius: var(--r); width: 100%; max-width: 500px;
+      max-height: 92vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,.22);
+      direction: rtl; animation: slideUp .2s ease;
+    }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-header { padding: 20px 22px 0; display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h2 { font-size: 1.15rem; font-weight: 800; }
+    .modal-close { background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--muted); padding: 4px 8px; border-radius: 6px; }
+    .modal-close:hover { background: var(--red-bg); color: var(--red); }
+    .modal-body { padding: 18px 22px; }
+    .modal-footer { padding: 4px 22px 20px; display: flex; justify-content: flex-end; gap: 10px; }
+
+    /* ── Form ─────────────────────────────────────────── */
+    .field { margin-bottom: 14px; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    label { display: block; font-size: .83rem; font-weight: 600; margin-bottom: 5px; color: #374151; }
+    input[type=text], input[type=number], select {
+      width: 100%; padding: 10px 13px; border: 1.5px solid var(--border); border-radius: 9px;
+      font-size: .92rem; font-family: inherit; direction: rtl; outline: none; background: #fff;
+      color: var(--text); transition: border-color .18s, box-shadow .18s;
+      -webkit-appearance: none; appearance: none;
+    }
+    input:focus, select:focus { border-color: var(--p); box-shadow: 0 0 0 3px rgba(124,58,237,.1); }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: left 10px center; padding-left: 32px;
+    }
+    .field-hint { font-size: .76rem; color: var(--muted); margin-top: 4px; }
+
+    /* ── Inline qty edit ──────────────────────────────── */
+    .qty-input-inline {
+      width: 60px; text-align: center; padding: 4px 8px; font-size: 1.4rem;
+      font-weight: 800; border: 2px solid var(--p); border-radius: 8px;
+      outline: none; font-family: inherit;
+    }
+
+    /* ── Toast ────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: #1f2937; color: #fff; padding: 11px 26px; border-radius: 30px;
+      font-size: .88rem; z-index: 400; opacity: 0; pointer-events: none;
+      transition: opacity .25s, transform .25s; white-space: nowrap; max-width: 90vw;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.error { background: var(--red); }
+    .toast.success { background: var(--green); }
+
+    /* ── Print ────────────────────────────────────────── */
+    @media print {
+      header .stats-bar, nav, .card-actions, .filter-bar, .no-print,
+      .btn, .qty-btn, .alert-bar { display: none !important; }
+      body { background: #fff; direction: rtl; }
+      .vendor-title { background: #333 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .card { box-shadow: none; border: 1px solid #ccc; }
+    }
+
+    /* ── PWA / iOS ────────────────────────────────────── */
+    @media (display-mode: standalone) {
+      body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+      header { padding-top: calc(18px + env(safe-area-inset-top)); }
+    }
+    @supports (-webkit-touch-callout: none) {
+      body { min-height: -webkit-fill-available; }
+    }
+
+    /* ── Responsive ───────────────────────────────────── */
+    @media (max-width: 560px) {
+      .field-row { grid-template-columns: 1fr; }
+      .nav-btn { font-size: .8rem; }
+      .card-body { grid-template-columns: 1fr; }
+      .qty-block { flex-direction: row; gap: 12px; align-items: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ─────────────────────────────────────────────── -->
+<header>
+  <div class="header-top">
+    <div class="logo">🍦</div>
+    <div>
+      <h1>אונו פופס</h1>
+      <p>מערכת ניהול מלאי</p>
+    </div>
+  </div>
+  <div class="stats-bar">
+    <div class="stat-chip" id="statTotal">⏳ טוען...</div>
+    <div class="stat-chip warn" id="statLow" hidden>⚠️ 0 מלאי נמוך</div>
+    <div class="stat-chip orders" id="statOrders" hidden>📋 0 פריטים להזמנה</div>
+  </div>
+</header>
+
+<!-- ── NAV ────────────────────────────────────────────────── -->
+<nav>
+  <button id="nav-search"  class="nav-btn active" onclick="showView('search')">📦 מלאי</button>
+  <button id="nav-fridges" class="nav-btn"        onclick="showView('fridges')">❄️ מקררים</button>
+  <button id="nav-orders"  class="nav-btn"        onclick="showView('orders')">📋 הזמנות</button>
+</nav>
+
+<main>
+
+  <!-- Config / error banner -->
+  <div id="configBanner" class="banner banner-warn" hidden>
+    ⚠️ <div id="configBannerText">
+      <strong>Firebase לא מוגדר</strong> — ערוך את קובץ ה-HTML והחלף את פרטי ה-Firebase
+      בקטע FIREBASE_CONFIG. ראה הוראות בתחתית הקובץ.
+    </div>
+  </div>
+
+  <!-- ── SEARCH / HOME ──────────────────────────────────── -->
+  <section id="view-search">
+    <div class="view-header">
+      <h2 id="searchTitle">כל המלאי</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="btn btn-sm btn-outline" onclick="startCountMode()">🔢 ספירת מלאי</button>
+        <button class="btn btn-outline" onclick="openOrderModal()">📋 הוסף הזמנה</button>
+        <button class="btn btn-primary" onclick="openAddModal()">+ הוסף מוצר</button>
+      </div>
+    </div>
+    <div class="search-wrap">
+      <input type="search" id="searchInput" class="search-input"
+        placeholder="חיפוש לפי שם מוצר... (למשל: טילון)"
+        oninput="handleSearch(this.value)" autocomplete="off">
+      <span class="search-icon">🔍</span>
+    </div>
+    <div class="filter-bar" id="searchFilterBar"></div>
+    <div class="sort-bar" id="sortBar"></div>
+    <div id="searchResults"></div>
+  </section>
+
+  <!-- ── FRIDGES ───────────────────────────────────────── -->
+  <section id="view-fridges" hidden>
+    <div id="fridgesContent"></div>
+  </section>
+
+  <!-- ── ORDERS ─────────────────────────────────────────── -->
+  <section id="view-orders" hidden>
+    <div class="view-header">
+      <h2>הזמנות קרובות</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline no-print" onclick="openOrderModal()">📋 הוסף הזמנה</button>
+        <button class="btn btn-danger btn-sm no-print" onclick="clearAllOrders()">🗑️ נקה הכל</button>
+        <button class="btn btn-outline no-print" onclick="window.print()">🖨️ הדפס</button>
+      </div>
+    </div>
+    <div id="ordersList"></div>
+  </section>
+
+</main>
+
+<!-- ── MODAL ──────────────────────────────────────────────── -->
+<div id="productModal" class="modal-backdrop" hidden onclick="backdropClick(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">הוסף מוצר</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="fId">
+
+      <div class="field">
+        <label for="fName">שם המוצר *</label>
+        <input type="text" id="fName" placeholder="למשל: טילון אלפחורס">
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="fVendor">ספק *</label>
+          <select id="fVendor">
+            <option value="">— בחר ספק —</option>
+            <option>שטראוס</option><option>פלדמן</option><option>נסטלה</option>
+            <option>רוסיות</option><option>עצמאי</option><option>צעצועים</option>
+            <option>ממתקים</option><option>שונות</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fQty">קרטונים במלאי</label>
+          <input type="number" id="fQty" min="0" value="0">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="fLoc">מיקום</label>
+        <select id="fLoc" onchange="toggleCustom(this.value)">
+          <option value="">— בחר מיקום —</option>
+          <optgroup label="🏪 מקררי חנות">
+            <option value="store_1">מקרר חנות 1</option>
+            <option value="store_2">מקרר חנות 2</option>
+            <option value="store_3">מקרר חנות 3</option>
+            <option value="store_4">מקרר חנות 4</option>
+            <option value="store_5">מקרר חנות 5</option>
+            <option value="store_6">מקרר חנות 6</option>
+            <option value="store_7">מקרר חנות 7</option>
+            <option value="store_8">מקרר חנות 8</option>
+            <option value="store_9">מקרר חנות 9</option>
+            <option value="store_10">מקרר חנות 10</option>
+            <option value="store_11">מקרר חנות 11</option>
+          </optgroup>
+          <optgroup label="🏭 מקררי מחסן">
+            <option value="warehouse_1">מקרר מחסן 1</option>
+            <option value="warehouse_2">מקרר מחסן 2</option>
+            <option value="warehouse_3">מקרר מחסן 3</option>
+            <option value="warehouse_4">מקרר מחסן 4</option>
+            <option value="warehouse_5">מקרר מחסן 5</option>
+          </optgroup>
+          <option value="custom">✏️ מיקום אחר (הזן ידנית)</option>
+        </select>
+      </div>
+
+      <div class="field" id="customField" hidden>
+        <label for="fCustomLoc">תאר את המיקום</label>
+        <input type="text" id="fCustomLoc" placeholder='למשל: "אצל מאיר בבית" / "ארון הדלפק"'>
+      </div>
+
+      <div class="field">
+        <label for="fOrderQty">כמות להזמנה הקרובה (קרטונים)</label>
+        <input type="number" id="fOrderQty" min="0" value="0">
+        <div class="field-hint">השאר 0 אם אין צורך בהזמנה</div>
+      </div>
+
+      <div class="field">
+        <label for="fNotes">הערות</label>
+        <input type="text" id="fNotes" placeholder='למשל: "פג תוקף ב-15/7" / "לא להזמין עד שנגמר"'>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">ביטול</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="saveProduct()">💾 שמור</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ORDER MODAL ─────────────────────────────────────────────── -->
+<div id="orderModal" class="modal-backdrop" hidden onclick="orderBackdropClick(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📋 הוסף להזמנה</h2>
+      <button class="modal-close" onclick="closeOrderModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="oName">שם המוצר *</label>
+        <input type="text" id="oName" placeholder="למשל: טילון אלפחורס">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="oVendor">ספק *</label>
+          <select id="oVendor">
+            <option value="">— בחר ספק —</option>
+            <option>שטראוס</option><option>פלדמן</option><option>נסטלה</option>
+            <option>רוסיות</option><option>עצמאי</option><option>צעצועים</option>
+            <option>ממתקים</option><option>שונות</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="oQty">קרטונים להזמנה *</label>
+          <input type="number" id="oQty" min="1" value="1">
+        </div>
+      </div>
+      <p class="field-hint">המוצר יתווסף למלאי עם כמות 0 וייכלל בהזמנה הקרובה.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeOrderModal()">ביטול</button>
+      <button class="btn btn-primary" id="saveOrderBtn" onclick="saveQuickOrder()">📋 הוסף להזמנה</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── COUNT MODE ─────────────────────────────────────────────── -->
+<div id="countModal" class="count-overlay" hidden>
+  <div class="count-card">
+    <div class="count-top-bar">
+      <button class="btn btn-sm btn-outline" onclick="endCountMode()">✕ יציאה</button>
+      <span class="count-progress-text" id="countProgressText">1 / 1</span>
+      <div style="width:72px"></div>
+    </div>
+    <div class="count-progress-track">
+      <div class="count-progress-fill" id="countProgressFill" style="width:0%"></div>
+    </div>
+    <div class="count-product-area">
+      <div id="countVendorChip"></div>
+      <div class="count-name" id="countName"></div>
+      <div class="count-meta" id="countMeta"></div>
+      <div class="count-prev" id="countPrev"></div>
+    </div>
+    <div class="count-input-area">
+      <div class="count-input-label">כמות בפועל (קרטונים):</div>
+      <div class="count-big-controls">
+        <button class="count-btn" onclick="adjustCountInput(-1)">−</button>
+        <input type="number" id="countInput" class="count-input" min="0" value="0">
+        <button class="count-btn" onclick="adjustCountInput(1)">+</button>
+      </div>
+    </div>
+    <div class="count-footer">
+      <button class="btn btn-outline" onclick="skipCountItem()">דלג ←</button>
+      <button class="btn btn-primary" onclick="saveCountItem()">שמור → הבא</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  ⚙️  FIREBASE CONFIG
+//  Replace ALL values below with your project's config object
+// ═══════════════════════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCK846i3XKnSDNRSaBJ84fA2jmC6xrBe8E",
+  authDomain: "onopops-a6241.firebaseapp.com",
+  projectId: "onopops-a6241",
+  storageBucket: "onopops-a6241.firebasestorage.app",
+  messagingSenderId: "205059199177",
+  appId: "1:205059199177:web:b7ced16b37efe3b5cd3d18",
+  measurementId: "G-5JDBSX4G61"
+};
+// ═══════════════════════════════════════════════════════════════
+
+const VENDORS = ['שטראוס','פלדמן','נסטלה','רוסיות','עצמאי','צעצועים','ממתקים','שונות'];
+
+const VCOLORS = {
+  'שטראוס': ['#fef3c7','#92400e'], 'פלדמן':  ['#dbeafe','#1e40af'],
+  'נסטלה':  ['#fce7f3','#9d174d'], 'רוסיות': ['#fee2e2','#991b1b'],
+  'עצמאי':  ['#f3f4f6','#374151'], 'צעצועים':['#d1fae5','#065f46'],
+  'ממתקים': ['#ede9fe','#5b21b6'], 'שונות':  ['#f1f5f9','#475569'],
+};
+
+let db = null;
+let products = [];           // full local cache
+let searchActiveFilter = 'all';
+let sortOrder     = 'name';
+let currentView   = 'search';
+let currentFridge = null;
+let searchTimer   = null;
+let countList     = [];
+let countIndex    = 0;
+
+// ── Init ────────────────────────────────────────────────────────
+function isConfigured() {
+  return FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
+}
+
+function showBanner(html) {
+  document.getElementById('configBannerText').innerHTML = html;
+  document.getElementById('configBanner').hidden = false;
+  document.getElementById('statTotal').textContent = '⚠️ שגיאה';
+}
+
+async function initApp() {
+  if (!isConfigured()) {
+    showBanner('<strong>Firebase לא מוגדר</strong> — ערוך את קובץ ה-HTML והחלף את פרטי ה-Firebase בקטע FIREBASE_CONFIG.');
+    return;
+  }
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.firestore();
+    await loadAllProducts();
+    updateStats();
+    buildSearchFilterBar();
+    buildSortBar();
+    runSearch('');   // show all products on load
+  } catch (e) {
+    const msg = e.message || '';
+    if (msg.includes('NOT_FOUND') || msg.includes('not found') || msg.includes('NOT_INITIALIZED')) {
+      showBanner('<strong>Firestore לא נוצר עדיין</strong> — כנס ל-Firebase Console → Firestore Database → צור מסד נתונים (בחר Test Mode).');
+    } else if (msg.includes('permission') || msg.includes('PERMISSION_DENIED')) {
+      showBanner('<strong>שגיאת הרשאות Firestore</strong> — כנס ל-Firestore → Rules והגדר <code>allow read, write: if true;</code>');
+    } else {
+      showBanner('<strong>שגיאת חיבור:</strong> ' + msg + ' — בדוק שה-Config נכון ושה-Firestore נוצר.');
+    }
+  }
+}
+
+// ── Load all products ────────────────────────────────────────────
+async function loadAllProducts() {
+  const snap = await db.collection('products').orderBy('name').get();
+  products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// ── Stats ────────────────────────────────────────────────────────
+function updateStats() {
+  const total    = products.length;
+  const lowCount = products.filter(p => (p.quantity ?? 0) <= 1).length;
+  const ordCount = products.filter(p => (p.upcomingQty ?? 0) > 0).length;
+
+  const st = document.getElementById('statTotal');
+  const sl = document.getElementById('statLow');
+  const so = document.getElementById('statOrders');
+
+  st.textContent = `📦 ${total} מוצרים`;
+  if (lowCount > 0) { sl.textContent = `⚠️ ${lowCount} מלאי נמוך`; sl.hidden = false; } else sl.hidden = true;
+  if (ordCount > 0) { so.textContent = `📋 ${ordCount} להזמנה`; so.hidden = false; }    else so.hidden = true;
+
+}
+
+// ── View switching ───────────────────────────────────────────────
+function showView(name) {
+  ['search','fridges','orders'].forEach(v => {
+    document.getElementById('view-'+ v).hidden = (v !== name);
+    document.getElementById('nav-' + v).classList.toggle('active', v === name);
+  });
+  currentView = name;
+  if (name === 'fridges') renderFridges();
+  if (name === 'orders')  renderOrders();
+}
+
+// ── Helpers ──────────────────────────────────────────────────────
+function locLabel(loc, custom) {
+  if (!loc) return '—';
+  if (loc === 'custom') return custom || 'מיקום מותאם';
+  if (loc.startsWith('store_'))     return 'מקרר חנות '  + loc.slice(6);
+  if (loc.startsWith('warehouse_')) return 'מקרר מחסן '  + loc.slice(10);
+  return loc;
+}
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function highlight(text, query) {
+  if (!query) return esc(text);
+  const safe = query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return esc(text).replace(new RegExp(safe, 'gi'), m => `<mark>${esc(m)}</mark>`);
+}
+function vchip(vendor) {
+  const [bg, fg] = VCOLORS[vendor] || ['#f3f4f6','#374151'];
+  return `<span class="vendor-chip" style="background:${bg};color:${fg}">${esc(vendor||'—')}</span>`;
+}
+function qtyClass(n) { return n <= 1 ? 'danger' : n <= 5 ? 'warn' : 'ok'; }
+
+function applySort(list) {
+  if      (sortOrder === 'qty-asc')  list.sort((a,b) => (a.quantity??0) - (b.quantity??0));
+  else if (sortOrder === 'qty-desc') list.sort((a,b) => (b.quantity??0) - (a.quantity??0));
+  else if (sortOrder === 'vendor')   list.sort((a,b) => (a.vendor||'').localeCompare(b.vendor||'','he') || (a.name||'').localeCompare(b.name||'','he'));
+  // 'name': already sorted by loadAllProducts / add flow
+}
+
+// ── Search ───────────────────────────────────────────────────────
+function handleSearch(val) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => runSearch(val), 180);
+}
+function runSearch(val) {
+  const box = document.getElementById('searchResults');
+  if (!db) { box.innerHTML = emptyHtml('⚠️','לא מחובר'); return; }
+
+  const q    = val.trim().toLowerCase();
+  const title = document.getElementById('searchTitle');
+
+  // Apply vendor/low filter first
+  let list = [...products];
+  if      (searchActiveFilter === 'low') list = list.filter(p => (p.quantity??0) <= 1);
+  else if (searchActiveFilter !== 'all') list = list.filter(p => p.vendor === searchActiveFilter);
+
+  // Then apply text search if any
+  if (q) list = list.filter(p => (p.name||'').toLowerCase().includes(q));
+
+  applySort(list);
+
+  if (q) {
+    title.textContent = `תוצאות חיפוש עבור "${val}"`;
+  } else if (searchActiveFilter === 'low') {
+    title.textContent = 'מוצרים עם מלאי נמוך';
+  } else if (searchActiveFilter !== 'all') {
+    title.textContent = `מלאי — ${searchActiveFilter}`;
+  } else {
+    title.textContent = 'כל המלאי';
+  }
+
+  box.innerHTML = list.length
+    ? (q ? `<div class="results-count">נמצאו ${list.length} תוצאות</div>` : '') +
+      list.map(p => cardHtml(p, 'inventory', q)).join('')
+    : q
+      ? emptyHtml('🔍', `לא נמצאו תוצאות עבור "${esc(val)}"`, 'נסה חיפוש שונה')
+      : emptyHtml('📦', 'אין מוצרים במלאי', 'לחץ "+ הוסף מוצר" כדי להתחיל');
+}
+
+// ── Search filter bar ────────────────────────────────────────────
+function buildSearchFilterBar() {
+  const chips = [
+    { key:'all', label:'הכל' },
+    ...VENDORS.map(v => ({ key: v, label: v })),
+    { key:'low', label:'⚠️ מלאי נמוך', cls:'warn-chip' },
+  ];
+  document.getElementById('searchFilterBar').innerHTML = chips.map(c =>
+    `<button class="fchip ${c.cls||''} ${searchActiveFilter===c.key?'active':''}"
+      onclick="setSearchFilter('${c.key}')">${esc(c.label)}</button>`
+  ).join('');
+}
+function setSearchFilter(key) {
+  searchActiveFilter = key;
+  buildSearchFilterBar();
+  runSearch(document.getElementById('searchInput').value);
+}
+function buildSortBar() {
+  const opts = [
+    { key:'name',     label:'א-ת' },
+    { key:'qty-asc',  label:'כמות ↑' },
+    { key:'qty-desc', label:'כמות ↓' },
+    { key:'vendor',   label:'ספק' },
+  ];
+  document.getElementById('sortBar').innerHTML =
+    `<span class="sort-label">מיון:</span>` +
+    opts.map(o => `<button class="fchip${sortOrder===o.key?' active':''}" onclick="setSortOrder('${o.key}')">${esc(o.label)}</button>`).join('');
+}
+function setSortOrder(key) {
+  sortOrder = key;
+  buildSortBar();
+  runSearch(document.getElementById('searchInput').value);
+}
+// ── Fridges ──────────────────────────────────────────────────────
+function renderFridges() {
+  currentFridge = null;
+  const storeLocs     = Array.from({length:11}, (_,i) => `store_${i+1}`);
+  const warehouseLocs = Array.from({length:5},  (_,i) => `warehouse_${i+1}`);
+
+  function fridgeCard(locKey) {
+    const label   = locLabel(locKey, '');
+    const items   = products.filter(p => p.location === locKey);
+    const hasLow  = items.some(p => (p.quantity??0) <= 1);
+    return `<div class="fridge-card${hasLow?' has-low':''}${!items.length?' empty-fridge':''}"
+      onclick="renderFridgeDetail('${locKey}')">
+      <div class="fridge-icon">❄️</div>
+      <div class="fridge-name">${esc(label)}</div>
+      <div class="fridge-count">${items.length ? `${items.length} פריטים` : 'ריק'}</div>
+      ${hasLow ? `<span class="low-badge">מלאי נמוך</span>` : ''}
+    </div>`;
+  }
+
+  document.getElementById('fridgesContent').innerHTML = `
+    <div class="view-header" style="margin-bottom:4px">
+      <h2>❄️ מקררים</h2>
+    </div>
+    <p class="fridge-section-title">🏪 מקררי חנות</p>
+    <div class="fridge-grid">${storeLocs.map(fridgeCard).join('')}</div>
+    <p class="fridge-section-title">🏭 מקררי מחסן</p>
+    <div class="fridge-grid">${warehouseLocs.map(fridgeCard).join('')}</div>
+  `;
+}
+
+function renderFridgeDetail(locKey) {
+  currentFridge = locKey;
+  const label = locLabel(locKey, '');
+  const items = products.filter(p => p.location === locKey);
+  document.getElementById('fridgesContent').innerHTML = `
+    <div class="view-header">
+      <h2>❄️ ${esc(label)}</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" onclick="renderFridges()">→ כל המקררים</button>
+        <button class="btn btn-primary" onclick="openAddModalForFridge('${locKey}')">+ הוסף לכאן</button>
+      </div>
+    </div>
+    ${items.length
+      ? items.map(p => cardHtml(p, 'inventory')).join('')
+      : emptyHtml('❄️', 'המקרר ריק', 'לחץ "+ הוסף לכאן" כדי להוסיף מוצר')}
+  `;
+}
+
+function openAddModalForFridge(locKey) {
+  fillModal(null);
+  document.getElementById('fLoc').value = locKey;
+  toggleCustom(locKey);
+  document.getElementById('modalTitle').textContent = `+ הוסף ל${locLabel(locKey,'')}`;
+  document.getElementById('productModal').hidden = false;
+  setTimeout(() => document.getElementById('fName').focus(), 60);
+}
+
+// ── Orders ───────────────────────────────────────────────────────
+function renderOrders() {
+  const el      = document.getElementById('ordersList');
+  const ordered = products.filter(p => (p.upcomingQty ?? 0) > 0);
+  if (!ordered.length) { el.innerHTML = emptyHtml('📋','אין פריטים בהזמנה הקרובה','הוסף מוצרים להזמנה דרך כפתור "הזמנה" בכרטיס'); return; }
+
+  const grandTotal = ordered.reduce((s,p) => s + (p.upcomingQty||0), 0);
+  let html = `<div class="orders-summary no-print">
+    <span>${ordered.length} מוצרים מ-${[...new Set(ordered.map(p=>p.vendor))].length} ספקים</span>
+    <strong>סה״כ ${grandTotal} קרטונים</strong>
+  </div>`;
+
+  VENDORS.forEach(vendor => {
+    const items = ordered.filter(p => p.vendor === vendor);
+    if (!items.length) return;
+    const total = items.reduce((s,p) => s + (p.upcomingQty||0), 0);
+    html += `<div class="vendor-block">
+      <div class="vendor-title">
+        <span>${esc(vendor)}</span>
+        <span class="vendor-total">סה״כ ${total} קרטונים</span>
+      </div>
+      <ul class="order-list">
+        ${items.map(p=>`<li>
+          <span>${esc(p.name)}</span>
+          <div class="order-item-actions">
+            <strong>${p.upcomingQty} קרטונים</strong>
+            <button class="btn btn-sm btn-outline no-print" onclick="promptOrder('${p.id}',${p.upcomingQty})" title="שנה כמות">✏️</button>
+            <button class="btn btn-sm btn-danger no-print" onclick="removeOrder('${p.id}')" title="הסר">✕</button>
+          </div>
+        </li>`).join('')}
+      </ul>
+    </div>`;
+  });
+  // items with unknown vendor
+  const other = ordered.filter(p => !VENDORS.includes(p.vendor));
+  if (other.length) {
+    html += `<div class="vendor-block">
+      <div class="vendor-title"><span>אחר</span></div>
+      <ul class="order-list">
+        ${other.map(p=>`<li>
+          <span>${esc(p.name)} (${esc(p.vendor||'—')})</span>
+          <div class="order-item-actions">
+            <strong>${p.upcomingQty} קרטונים</strong>
+            <button class="btn btn-sm btn-outline no-print" onclick="promptOrder('${p.id}',${p.upcomingQty})" title="שנה כמות">✏️</button>
+            <button class="btn btn-sm btn-danger no-print" onclick="removeOrder('${p.id}')" title="הסר">✕</button>
+          </div>
+        </li>`).join('')}
+      </ul>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+// ── Remove single order ──────────────────────────────────────────
+async function removeOrder(id) {
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  p.upcomingQty = 0;
+  await db.collection('products').doc(id).update({ upcomingQty: 0 });
+  updateStats(); renderOrders();
+  toast('הוסר מהרשימה');
+}
+
+// ── Clear all orders ─────────────────────────────────────────────
+async function clearAllOrders() {
+  const ordered = products.filter(p => (p.upcomingQty??0) > 0);
+  if (!ordered.length) { toast('אין הזמנות לניקוי'); return; }
+  if (!confirm(`לנקות את כל ההזמנות (${ordered.length} פריטים)?`)) return;
+  const batch = db.batch();
+  ordered.forEach(p => batch.update(db.collection('products').doc(p.id), { upcomingQty: 0 }));
+  await batch.commit();
+  ordered.forEach(p => { p.upcomingQty = 0; });
+  updateStats(); renderOrders(); toast('הזמנות נוקו ✅', 'success');
+}
+
+// ── Card HTML ────────────────────────────────────────────────────
+function cardHtml(p, mode, searchQuery = '') {
+  const id    = p.id;
+  const loc   = locLabel(p.location, p.locationCustom);
+  const qty   = p.quantity ?? 0;
+  const uQty  = p.upcomingQty ?? 0;
+  const qc    = qtyClass(qty);
+  const isLow = qty <= 1;
+
+  return `<div class="card${isLow?' low-stock':''}" id="card-${id}">
+    <div class="card-top">
+      <span class="prod-name">${searchQuery ? highlight(p.name, searchQuery) : esc(p.name)}${isLow?` <span class="low-badge">מלאי נמוך</span>`:''}</span>
+      ${vchip(p.vendor)}
+    </div>
+    <div class="card-body">
+      <div class="qty-block">
+        <div class="qty-controls">
+          <button class="qty-btn" onclick="adjustQty('${id}',-1)" title="הפחת קרטון">−</button>
+          <span class="qty-num ${qc}" id="qty-${id}" onclick="startInlineEdit('${id}',${qty})" title="לחץ לעריכה ישירה">${qty}</span>
+          <button class="qty-btn" onclick="adjustQty('${id}',+1)" title="הוסף קרטון">+</button>
+        </div>
+        <span class="qty-label">קרטונים</span>
+      </div>
+      <div class="card-info">
+        <div class="info-row"><span class="info-label">📍 מיקום</span><span>${esc(loc)}</span></div>
+        <div class="info-row"><span class="info-label">🏢 ספק</span><span>${esc(p.vendor||'—')}</span></div>
+        <div class="info-row">
+          <span class="info-label">📋 הזמנה</span>
+          <span>${uQty>0?`<span class="order-chip">✅ ${uQty} קרטונים</span>`:'<span class="no-order">לא הוזמן</span>'}</span>
+        </div>
+        ${p.notes?`<div class="info-row"><span class="info-label">📝</span><span style="font-size:.82rem;color:var(--muted);font-style:italic">${esc(p.notes)}</span></div>`:''}
+      </div>
+    </div>
+    <div class="card-actions">
+      ${mode==='inventory'?`
+        <button class="btn btn-sm btn-outline" onclick="openEditModal('${id}')">✏️ ערוך</button>
+        <button class="btn btn-sm btn-danger"  onclick="deleteProduct('${id}')">🗑️ מחק</button>`:''}
+      <button class="btn btn-sm btn-success" onclick="promptOrder('${id}',${uQty})">📋 הזמנה</button>
+    </div>
+  </div>`;
+}
+
+// ── Inline qty edit ──────────────────────────────────────────────
+function startInlineEdit(id, current) {
+  const span = document.getElementById('qty-' + id);
+  if (!span) return;
+  span.innerHTML = `<input class="qty-input-inline" type="number" min="0" value="${current}"
+    onblur="commitInlineEdit('${id}',this.value)"
+    onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this.value=${current};this.blur();}">`;
+  const inp = span.querySelector('input');
+  inp.focus(); inp.select();
+}
+async function commitInlineEdit(id, val) {
+  const qty = Math.max(0, parseInt(val) || 0);
+  const p   = products.find(x => x.id === id);
+  if (!p || p.quantity === qty) { rerenderCard(id); return; }
+  p.quantity = qty;
+  await db.collection('products').doc(id).update({ quantity: qty });
+  updateStats(); rerenderCard(id);
+}
+function rerenderCard(id) {
+  const p  = products.find(x => x.id === id);
+  const el = document.getElementById('card-' + id);
+  if (!p || !el) return;
+  // always render with full buttons (inventory mode) since search tab now shows all products
+  el.outerHTML = cardHtml(p, 'inventory');
+}
+
+// ── Quick qty adjust ─────────────────────────────────────────────
+async function adjustQty(id, delta) {
+  const p   = products.find(x => x.id === id);
+  if (!p) return;
+  const qty = Math.max(0, (p.quantity ?? 0) + delta);
+  p.quantity = qty;
+  await db.collection('products').doc(id).update({ quantity: qty });
+  updateStats(); rerenderCard(id);
+}
+
+// ── Quick order prompt ────────────────────────────────────────────
+async function promptOrder(id, current) {
+  const p = products.find(x => x.id === id);
+  const val = prompt(`כמה קרטונים להזמין עבור "${p?.name || ''}"?\n(0 = הסר מהרשימה)`, current);
+  if (val === null) return;
+  const qty = Math.max(0, parseInt(val) || 0);
+  p.upcomingQty = qty;
+  await db.collection('products').doc(id).update({ upcomingQty: qty });
+  toast(qty > 0 ? `עודכן: ${qty} קרטונים להזמנה ✅` : 'הוסר מהרשימה', 'success');
+  updateStats(); rerenderCard(id);
+  if (currentView === 'orders') renderOrders();
+}
+
+// ── Modal ─────────────────────────────────────────────────────────
+function openAddModal() {
+  fillModal(null);
+  document.getElementById('modalTitle').textContent = '+ הוסף מוצר';
+  document.getElementById('productModal').hidden = false;
+  setTimeout(() => document.getElementById('fName').focus(), 60);
+}
+function openEditModal(id) {
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  fillModal(p);
+  document.getElementById('modalTitle').textContent = '✏️ ערוך מוצר';
+  document.getElementById('productModal').hidden = false;
+}
+function fillModal(p) {
+  document.getElementById('fId').value        = p?.id ?? '';
+  document.getElementById('fName').value      = p?.name ?? '';
+  document.getElementById('fVendor').value    = p?.vendor ?? '';
+  document.getElementById('fQty').value       = p?.quantity ?? 0;
+  document.getElementById('fLoc').value       = p?.location ?? '';
+  document.getElementById('fCustomLoc').value = p?.locationCustom ?? '';
+  document.getElementById('fOrderQty').value  = p?.upcomingQty ?? 0;
+  document.getElementById('fNotes').value     = p?.notes ?? '';
+  toggleCustom(p?.location ?? '');
+}
+function closeModal()      { document.getElementById('productModal').hidden = true; }
+function backdropClick(e)  { if (e.target.id === 'productModal') closeModal(); }
+function toggleCustom(val) { document.getElementById('customField').hidden = val !== 'custom'; }
+
+// ── Quick order modal ─────────────────────────────────────────────
+function openOrderModal() {
+  document.getElementById('oName').value   = '';
+  document.getElementById('oVendor').value = '';
+  document.getElementById('oQty').value    = 1;
+  document.getElementById('orderModal').hidden = false;
+  setTimeout(() => document.getElementById('oName').focus(), 60);
+}
+function closeOrderModal()     { document.getElementById('orderModal').hidden = true; }
+function orderBackdropClick(e) { if (e.target.id === 'orderModal') closeOrderModal(); }
+
+async function saveQuickOrder() {
+  const name   = document.getElementById('oName').value.trim();
+  const vendor = document.getElementById('oVendor').value;
+  const qty    = Math.max(1, parseInt(document.getElementById('oQty').value) || 1);
+  if (!name)   { toast('יש להזין שם מוצר', 'error'); return; }
+  if (!vendor) { toast('יש לבחור ספק', 'error'); return; }
+
+  const btn = document.getElementById('saveOrderBtn');
+  btn.disabled = true; btn.textContent = '...שומר';
+  try {
+    const data = { name, vendor, quantity: 0, location: '', locationCustom: '', upcomingQty: qty };
+    const ref  = await db.collection('products').add(data);
+    products.push({ id: ref.id, ...data });
+    products.sort((a,b) => a.name.localeCompare(b.name, 'he'));
+    closeOrderModal();
+    updateStats(); buildSearchFilterBar();
+    runSearch(document.getElementById('searchInput').value);
+    if (currentView === 'orders') renderOrders();
+    toast(`${name} נוסף להזמנה ✅`, 'success');
+  } catch (e) {
+    toast('שגיאה: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '📋 הוסף להזמנה';
+  }
+}
+
+// ── Save ──────────────────────────────────────────────────────────
+async function saveProduct() {
+  const name   = document.getElementById('fName').value.trim();
+  const vendor = document.getElementById('fVendor').value;
+  if (!name)   { toast('יש להזין שם מוצר','error'); return; }
+  if (!vendor) { toast('יש לבחור ספק','error'); return; }
+
+  const data = {
+    name, vendor,
+    quantity:       Math.max(0, parseInt(document.getElementById('fQty').value)      || 0),
+    location:       document.getElementById('fLoc').value,
+    locationCustom: document.getElementById('fCustomLoc').value.trim(),
+    upcomingQty:    Math.max(0, parseInt(document.getElementById('fOrderQty').value) || 0),
+    notes:          document.getElementById('fNotes').value.trim(),
+  };
+
+  const btn  = document.getElementById('saveBtn');
+  btn.disabled = true; btn.textContent = '...שומר';
+
+  try {
+    const editId = document.getElementById('fId').value;
+    if (editId) {
+      await db.collection('products').doc(editId).update(data);
+      const idx = products.findIndex(p => p.id === editId);
+      if (idx !== -1) products[idx] = { id: editId, ...data };
+      toast('מוצר עודכן ✅', 'success');
+    } else {
+      const ref = await db.collection('products').add(data);
+      products.push({ id: ref.id, ...data });
+      products.sort((a,b) => a.name.localeCompare(b.name, 'he'));
+      toast('מוצר נוסף ✅', 'success');
+    }
+    closeModal();
+    updateStats(); buildSearchFilterBar();
+    runSearch(document.getElementById('searchInput').value);
+    if (currentView === 'fridges') {
+      if (currentFridge) renderFridgeDetail(currentFridge); else renderFridges();
+    }
+  } catch (e) {
+    toast('שגיאה בשמירה: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 שמור';
+  }
+}
+
+// ── Delete ────────────────────────────────────────────────────────
+async function deleteProduct(id) {
+  const p = products.find(x => x.id === id);
+  if (!p || !confirm(`למחוק את "${p.name}"?`)) return;
+  await db.collection('products').doc(id).delete();
+  products = products.filter(x => x.id !== id);
+  updateStats(); buildSearchFilterBar();
+  runSearch(document.getElementById('searchInput').value);
+  if (currentView === 'fridges') {
+    if (currentFridge) renderFridgeDetail(currentFridge); else renderFridges();
+  }
+  toast('מוצר נמחק');
+}
+
+// ── HTML helpers ──────────────────────────────────────────────────
+function emptyHtml(icon, msg, sub = '') {
+  return `<div class="empty"><div class="empty-icon">${icon}</div><p>${esc(msg)}</p>${sub?`<small>${esc(sub)}</small>`:''}</div>`;
+}
+
+// ── Toast ─────────────────────────────────────────────────────────
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast show ${type}`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Count mode ────────────────────────────────────────────────────
+function startCountMode() {
+  let list = [...products];
+  if      (searchActiveFilter === 'low') list = list.filter(p => (p.quantity??0) <= 1);
+  else if (searchActiveFilter !== 'all') list = list.filter(p => p.vendor === searchActiveFilter);
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  if (q) list = list.filter(p => (p.name||'').toLowerCase().includes(q));
+  applySort(list);
+  if (!list.length) { toast('אין מוצרים לספירה'); return; }
+  countList  = list;
+  countIndex = 0;
+  document.getElementById('countModal').hidden = false;
+  renderCountItem();
+}
+
+function renderCountItem() {
+  if (countIndex >= countList.length) {
+    endCountMode();
+    toast('ספירת המלאי הושלמה ✅', 'success');
+    runSearch(document.getElementById('searchInput').value);
+    return;
+  }
+  const p    = countList[countIndex];
+  const pct  = Math.round(countIndex / countList.length * 100);
+  document.getElementById('countProgressText').textContent = `${countIndex + 1} / ${countList.length}`;
+  document.getElementById('countProgressFill').style.width = pct + '%';
+  document.getElementById('countVendorChip').innerHTML  = vchip(p.vendor);
+  document.getElementById('countName').textContent      = p.name;
+  document.getElementById('countMeta').textContent      = locLabel(p.location, p.locationCustom);
+  document.getElementById('countPrev').textContent      = `כמות קיימת: ${p.quantity ?? 0} קרטונים`;
+  const inp = document.getElementById('countInput');
+  inp.value = p.quantity ?? 0;
+  setTimeout(() => { inp.focus(); inp.select(); }, 60);
+}
+
+function endCountMode() {
+  document.getElementById('countModal').hidden = true;
+  countList  = [];
+  countIndex = 0;
+}
+
+function adjustCountInput(delta) {
+  const inp = document.getElementById('countInput');
+  inp.value = Math.max(0, (parseInt(inp.value) || 0) + delta);
+}
+
+async function saveCountItem() {
+  const p   = countList[countIndex];
+  if (!p) return;
+  const qty = Math.max(0, parseInt(document.getElementById('countInput').value) || 0);
+  if (p.quantity !== qty) {
+    p.quantity = qty;
+    await db.collection('products').doc(p.id).update({ quantity: qty });
+    updateStats();
+  }
+  countIndex++;
+  renderCountItem();
+}
+
+function skipCountItem() {
+  countIndex++;
+  renderCountItem();
+}
+
+// ── Keyboard ──────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModal(); closeOrderModal(); endCountMode(); }
+  if (e.key === 'Enter' && !document.getElementById('productModal').hidden) {
+    if (document.activeElement.tagName !== 'BUTTON') saveProduct();
+  }
+  if (e.key === 'Enter' && !document.getElementById('orderModal').hidden) {
+    if (document.activeElement.tagName !== 'BUTTON') saveQuickOrder();
+  }
+  if (e.key === 'Enter' && !document.getElementById('countModal').hidden) {
+    saveCountItem();
+  }
+});
+
+// ── Boot ──────────────────────────────────────────────────────────
+initApp();
+
+// ── PWA: inject manifest ──────────────────────────────────────────
+(function () {
+  const manifest = {
+    name: "אונו פופס — ניהול מלאי",
+    short_name: "אונו פופס",
+    start_url: ".",
+    display: "standalone",
+    background_color: "#f5f3ff",
+    theme_color: "#7c3aed",
+    lang: "he",
+    dir: "rtl",
+    icons: [{
+      src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8D%A6%3C/text%3E%3C/svg%3E",
+      sizes: "512x512",
+      type: "image/svg+xml"
+    }]
+  };
+  const link = document.createElement('link');
+  link.rel = 'manifest';
+  link.href = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: 'application/json' }));
+  document.head.appendChild(link);
+})();
+
+// ── PWA: service worker ───────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    const sw = `
+      self.addEventListener('install', () => self.skipWaiting());
+      self.addEventListener('activate', e => {
+        e.waitUntil(
+          caches.keys()
+            .then(names => Promise.all(names.map(n => caches.delete(n))))
+            .then(() => self.clients.claim())
+        );
+      });
+      self.addEventListener('fetch', e => {
+        e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+      });
+    `;
+    navigator.serviceWorker
+      .register(URL.createObjectURL(new Blob([sw], { type: 'application/javascript' })))
+      .catch(() => {});
+  });
+}
+
+// ── iOS: prevent pull-to-refresh ──────────────────────────────────
+let _py = 0;
+document.addEventListener('touchstart', e => { _py = e.touches[0].pageY; }, { passive: true });
+document.addEventListener('touchmove', e => {
+  if (window.scrollY === 0 && e.touches[0].pageY > _py) e.preventDefault();
+}, { passive: false });
+</script>
+
+<!--
+═══════════════════════════════════════════════════════════════════
+  HOW TO SET UP FIREBASE FIRESTORE (FREE — 5 minutes)
+═══════════════════════════════════════════════════════════════════
+
+1. GO TO FIREBASE
+   → https://console.firebase.google.com
+   → Click "Add project" (or sign in with Google)
+   → Name it (e.g. "onopops"), disable Google Analytics if you want → Create project
+
+2. CREATE FIRESTORE DATABASE
+   → In the left sidebar, click "Firestore Database"
+   → Click "Create database"
+   → Choose "Start in test mode" → Next → Pick any location → Enable
+
+3. ADD A WEB APP
+   → Click the gear icon (⚙️) next to "Project Overview" → Project settings
+   → Scroll down to "Your apps" → Click the </> (web) icon
+   → Give it a nickname (e.g. "onopops-web") → Register app
+   → You'll see a block that looks like:
+       const firebaseConfig = {
+         apiKey: "AIza...",
+         authDomain: "onopops.firebaseapp.com",
+         projectId: "onopops",
+         ...
+       };
+   → Copy ALL of that content
+
+4. PASTE INTO THIS FILE
+   → Open index.html in any text editor (Notepad, VS Code, etc.)
+   → Find the FIREBASE_CONFIG section near the bottom
+   → Replace the entire { apiKey: "YOUR_API_KEY", ... } block
+     with the config object you copied
+   → Save the file
+
+5. DONE — open index.html in a browser and it should work!
+
+6. DEPLOY TO GITHUB PAGES
+   → Create a new GitHub repository (github.com → New repository)
+   → Upload index.html  (drag and drop on the repository page)
+   → Go to Settings → Pages → Source: Deploy from branch → main → / (root) → Save
+   → After ~1 min your site is live at: https://yourusername.github.io/repo-name
+
+NOTE ON SECURITY:
+   Firestore is currently in "test mode" which allows open access for 30 days.
+   After 30 days, go to Firestore → Rules and set:
+     allow read, write: if true;
+   This keeps it open (fine for an internal shop tool with no sensitive data).
+
+═══════════════════════════════════════════════════════════════════
+-->
+</body>
+</html>
